@@ -1,0 +1,65 @@
+/* style.css (VERSÃO 3.0 - FINAL COM EDIÇÃO) */
+:root {
+    --bg-color: #101010;
+    --card-color: #1A1A1A;
+    --border-color: #2a2a2a;
+    --text-primary: #EAEAEA;
+    --text-secondary: #AAAAAA;
+    --accent-color: #00FF85;
+    --accent-hover: #00e676;
+    --font-family: 'Montserrat', sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 40px 20px;
+}
+
+.container { max-width: 1200px; margin: 0 auto; }
+header { text-align: center; margin-bottom: 50px; }
+header h1 { font-size: 3rem; font-weight: 700; margin: 0; }
+header .icon { display: inline-block; transform: translateY(4px); }
+header p { font-size: 1.2rem; color: var(--text-secondary); margin-top: 5px; }
+
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; }
+.card { background-color: var(--card-color); padding: 25px; border-radius: 15px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+.card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); }
+
+.stat-card .card-header { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+.stat-card .card-icon { font-size: 1.8rem; }
+.stat-card h3 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; }
+.stat-card .stat-value { font-size: 2.8rem; font-weight: 700; margin: 0; color: var(--accent-color); }
+
+.form-card { grid-column: span 2; }
+@media (max-width: 960px) { .form-card { grid-column: span 1; } }
+.form-card h3 { margin-top: 0; margin-bottom: 20px; font-size: 1.2rem; font-weight: 700; }
+.form-group { margin-bottom: 15px; text-align: left; }
+.form-group label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-secondary); }
+.form-group input, .form-group select { width: 100%; padding: 12px; background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: var(--font-family); box-sizing: border-box; font-size: 1rem; }
+button[type="submit"] { width: 100%; padding: 15px; background-color: var(--accent-color); border: none; border-radius: 8px; color: #000; font-family: var(--font-family); font-size: 1rem; font-weight: 700; cursor: pointer; transition: background-color 0.2s ease; margin-top: 10px; }
+button[type="submit"]:hover { background-color: var(--accent-hover); }
+.form-message { margin-top: 15px; font-weight: 500; height: 20px; }
+.form-message.success { color: var(--accent-color); }
+.form-message.error { color: #ff4d4d; }
+
+.history-card { grid-column: 1 / -1; }
+.history-card h3 { margin-top: 0; margin-bottom: 20px; font-size: 1.2rem; font-weight: 700; }
+.history-list { max-height: 400px; overflow-y: auto; padding-right: 10px; }
+.loading-message, .empty-message { color: var(--text-secondary); padding: 20px 0; text-align: center; }
+.history-item { display: grid; grid-template-columns: 80px 1fr auto auto; gap: 15px; align-items: center; padding: 15px 10px; border-bottom: 1px solid var(--border-color); }
+.history-item:last-child { border-bottom: none; }
+.history-item .platform { font-weight: 700; font-size: 1.1rem; }
+.history-item .details .date { font-size: 0.9rem; font-weight: 500; color: var(--text-primary); margin-bottom: 5px; }
+.history-item .details .path { font-size: 0.8rem; color: var(--text-secondary); }
+.history-item .details .payment { font-size: 0.8rem; color: var(--accent-color); font-weight: 500; margin-top: 5px; }
+.history-item .value { font-size: 1.2rem; font-weight: 700; color: var(--accent-color); }
+.history-item .actions { display: flex; gap: 10px; }
+.history-item .actions button { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); transition: color 0.2s; }
+.history-item .actions button:hover { color: var(--text-primary); }
+
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background-color: var(--card-color); padding: 30px; border-radius: 15px; width: 90%; max-width: 400px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+.close-button { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; }

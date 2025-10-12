@@ -1,0 +1,21 @@
+# Ambiente virtual do Python
+venv/
+/venv/
+
+# Arquivos temporários do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Banco de dados local
+corridas.db
+instance/
+
+# Arquivos de segredos e tokens do Google
+credentials.json
+token.json
+
+# Arquivos de configuração de editores
+.vscode/
+.idea/
