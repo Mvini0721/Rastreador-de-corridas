@@ -1,4 +1,4 @@
-# email_processor.py (VERSÃO DE DEPURAÇÃO PARA A 99 - BUSCA ROBUSTA)
+# email_processor.py (VERSÃO FINAL DE PRODUÇÃO)
 import os
 import certifi
 
@@ -84,7 +84,7 @@ def parse_pdf_details(pdf_content, date_header):
     details = {'plataforma': '99', 'data_corrida': date_header, 'valor': None, 'origem': None, 'destino': None, 'forma_pagamento': None}
     try:
         texto_pdf = "".join(page.extract_text() for page in PdfReader(io.BytesIO(pdf_content)).pages)
-        match_valor = re.search(r'Total\s+R\$\s*([\d,]+\.\d{2})', texto_pdf, re.I)
+        match_valor = re.search(r'(?:Total|Valor\s+da\s+corrida)\s+R\$\s*([\d,]+\.\d{2})', texto_pdf, re.I)
         if match_valor: details['valor'] = float(match_valor.group(1).replace(',', ''))
         match_origem = re.search(r'Embarque\s+[\d/]+\s+às\s+\d{2}:\d{2}\s+em\s+(.*?)\s+Desembarque', texto_pdf, re.DOTALL)
         if match_origem: details['origem'] = match_origem.group(1).strip().replace('\n', ' ')
@@ -97,28 +97,33 @@ def parse_pdf_details(pdf_content, date_header):
     return details
 
 def add_ride_to_api(ride_details):
-    if ride_details.get('valor') is None: return False
+    if ride_details.get('valor') is None:
+        print("  -> Falha: Valor da corrida não encontrado no e-mail/PDF.")
+        return False
     try:
         response = requests.post(API_URL, json=ride_details)
-        return response.status_code in [200, 201]
+        if response.status_code in [200, 201]:
+            status = "registrada" if response.status_code == 201 else "duplicada ignorada"
+            print(f"  -> Sucesso! Corrida de R${ride_details.get('valor')} {status}.")
+            return True
+        else:
+            print(f"  -> Erro na API: {response.status_code} - {response.text}")
+            return False
     except requests.exceptions.ConnectionError:
+        print(f"  -> ERRO DE CONEXÃO com a API em {API_URL}.")
         return False
 
 def check_for_new_emails():
-    """Versão de depuração com a busca mais robusta possível."""
+    """Versão de PRODUÇÃO: Verifica e processa HTML da Uber e PDF da 99."""
     print(f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] Verificando por novos e-mails...")
     try:
         service = get_gmail_service()
         if not service: return
 
-        # --- [BUSCA FINAL E MAIS AMPLA] ---
-        query = "is:unread {uber 99} {recibo viagem}"
-        # ------------------------------------
+        query = "is:unread from:(@uber.com OR @99app.com) subject:(recibo OR sua viagem OR receipt)"
         
-        print(f"Usando a query de busca: '{query}'") # Linha de depuração
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
-        
         if not messages:
             print("Nenhum novo recibo de corrida encontrado.")
         else:
@@ -127,18 +132,45 @@ def check_for_new_emails():
                 msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
                 payload = msg['payload']
                 headers = payload['headers']
+                subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'Sem Assunto')
                 from_header = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
-                subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'N/A')
+                date_header = next((h['value'] for h in headers if h['name'].lower() == 'date'), '')
+                detalhes_corrida = None
                 
-                if '99app.com' in from_header or '99' in from_header:
-                    print("\n--- INICIANDO DEPURAÇÃO DO E-MAIL DA 99 ---")
-                    print("Assunto:", subject)
-                    print(json.dumps(payload, indent=2))
-                    print("--- FIM DA DEPURAÇÃO ---")
-                    service.users().messages().modify(userId='me', id=message['id'], body={'removeLabelIds': ['UNREAD']}).execute()
-                    print("  -> E-mail da 99 marcado como lido para fins de depuração.")
+                if '99app.com' in from_header:
+                    print(f"\nProcessando e-mail da 99: '{subject}'")
+                    parts = payload.get('parts', [])
+                    for part in parts:
+                        if part.get('mimeType') == 'application/pdf' and part.get('body') and part['body'].get('attachmentId'):
+                            attachment_id = part['body']['attachmentId']
+                            attachment = service.users().messages().attachments().get(userId='me', messageId=message['id'], id=attachment_id).execute()
+                            pdf_data = base64.urlsafe_b64decode(attachment['data'].encode('UTF-8'))
+                            detalhes_corrida = parse_pdf_details(pdf_data, date_header)
+                            break 
                 else: 
-                    print(f"\nIgnorando e-mail da Uber para depuração: '{subject}'")
+                    print(f"\nProcessando e-mail da Uber: '{subject}'")
+                    html_content = ""
+                    if 'parts' in payload:
+                        for part in payload['parts']:
+                            if part.get('mimeType') == 'text/html':
+                                data = part['body']['data']
+                                html_content = base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
+                                break
+                    if not html_content and 'body' in payload and 'data' in payload['body']:
+                        data = payload['body']['data']
+                        html_content = base64.urlsafe_b64decode(data.encode('ASCII')).decode('utf-8')
+                    if html_content:
+                        detalhes_corrida = parse_html_details(html_content, from_header, date_header)
+
+                if detalhes_corrida:
+                    sucesso = add_ride_to_api(detalhes_corrida)
+                    if sucesso:
+                        service.users().messages().modify(userId='me', id=message['id'], body={'removeLabelIds': ['UNREAD']}).execute()
+                        print("  -> E-mail marcado como lido.")
+                    else:
+                        print("  -> FALHA AO REGISTRAR. O e-mail NÃO será marcado como lido.")
+                else:
+                    print("  -> Não foi possível extrair detalhes. Marcando como lido para evitar loops.")
                     service.users().messages().modify(userId='me', id=message['id'], body={'removeLabelIds': ['UNREAD']}).execute()
     except Exception as e:
         print(f"!!! Ocorreu um erro inesperado: {e}")
@@ -146,7 +178,7 @@ def check_for_new_emails():
 if __name__ == '__main__':
     is_ci_environment = os.environ.get('GITHUB_ACTIONS')
     if is_ci_environment:
-        print("--- Robô rodando em modo de depuração. Executando uma vez. ---")
+        print("--- Robô rodando em ambiente de CI/CD. Executando uma vez. ---")
         check_for_new_emails()
     else:
         print("--- Serviço de Monitoramento de E-mails Iniciado (Modo Local) ---")
