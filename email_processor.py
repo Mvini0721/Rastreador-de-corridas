@@ -1,4 +1,4 @@
-# email_processor.py (MODO DE DEPURAÇÃO PARA 99 - COMPLETO)
+# email_processor.py (VERSÃO DE DEPURAÇÃO PARA A 99 - BUSCA ROBUSTA)
 import os
 import certifi
 
@@ -52,7 +52,6 @@ def get_gmail_service():
                 print("AVISO: Novo token gerado. Atualize o secret 'GOOGLE_TOKEN_JSON' no GitHub.")
     return build('gmail', 'v1', credentials=creds)
 
-# As funções de parse estão aqui, mas não serão usadas para o e-mail da 99 neste modo
 def parse_html_details(html_content, from_header, date_header):
     soup = BeautifulSoup(html_content, 'html.parser')
     details = {'valor': None, 'plataforma': 'Uber', 'origem': None, 'destino': None, 'data_corrida': date_header, 'forma_pagamento': None}
@@ -106,16 +105,20 @@ def add_ride_to_api(ride_details):
         return False
 
 def check_for_new_emails():
-    """Verifica e processa novos e-mails, com depuração para a 99."""
+    """Versão de depuração com a busca mais robusta possível."""
     print(f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] Verificando por novos e-mails...")
     try:
         service = get_gmail_service()
         if not service: return
 
-        query = "is:unread from:(@uber.com OR @99app.com) subject:(recibo OR sua viagem OR receipt)"
+        # --- [BUSCA FINAL E MAIS AMPLA] ---
+        query = "is:unread {uber 99} {recibo viagem}"
+        # ------------------------------------
         
+        print(f"Usando a query de busca: '{query}'") # Linha de depuração
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
+        
         if not messages:
             print("Nenhum novo recibo de corrida encontrado.")
         else:
@@ -127,7 +130,7 @@ def check_for_new_emails():
                 from_header = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
                 subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'N/A')
                 
-                if '99app.com' in from_header:
+                if '99app.com' in from_header or '99' in from_header:
                     print("\n--- INICIANDO DEPURAÇÃO DO E-MAIL DA 99 ---")
                     print("Assunto:", subject)
                     print(json.dumps(payload, indent=2))
