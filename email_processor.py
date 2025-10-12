@@ -1,4 +1,4 @@
-# email_processor.py (VERSÃO FINAL DE PRODUÇÃO)
+# email_processor.py (VERSÃO FINAL - BUSCA MAIS AMPLA)
 import os
 import certifi
 
@@ -98,7 +98,7 @@ def parse_pdf_details(pdf_content, date_header):
 
 def add_ride_to_api(ride_details):
     if ride_details.get('valor') is None:
-        print("  -> Falha: Valor da corrida não encontrado no e-mail/PDF.")
+        print("  -> Falha: Valor da corrida não encontrado.")
         return False
     try:
         response = requests.post(API_URL, json=ride_details)
@@ -114,16 +114,20 @@ def add_ride_to_api(ride_details):
         return False
 
 def check_for_new_emails():
-    """Versão de PRODUÇÃO: Verifica e processa HTML da Uber e PDF da 99."""
+    """Versão de produção com a busca mais ampla possível."""
     print(f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] Verificando por novos e-mails...")
     try:
         service = get_gmail_service()
         if not service: return
 
-        query = "is:unread from:(@uber.com OR @99app.com) subject:(recibo OR sua viagem OR receipt)"
+        # --- [BUSCA FINAL E MAIS SIMPLES] ---
+        query = "is:unread 99"
+        # ------------------------------------
         
+        print(f"Usando a query de busca: '{query}'")
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
+        
         if not messages:
             print("Nenhum novo recibo de corrida encontrado.")
         else:
@@ -137,7 +141,7 @@ def check_for_new_emails():
                 date_header = next((h['value'] for h in headers if h['name'].lower() == 'date'), '')
                 detalhes_corrida = None
                 
-                if '99app.com' in from_header:
+                if '99app.com' in from_header or '99' in from_header:
                     print(f"\nProcessando e-mail da 99: '{subject}'")
                     parts = payload.get('parts', [])
                     for part in parts:
