@@ -1,4 +1,4 @@
-# app.py (VERSÃO FINAL COMPLETA - SQLite)
+# app.py (VERSÃO FINAL COM MIGRATE E CORREÇÃO DE URL DO POSTGRES)
 import os
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -7,24 +7,21 @@ from datetime import datetime, timezone
 from sqlalchemy import func
 from dateutil import parser
 import pytz
+from flask_migrate import Migrate 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-# Cria a pasta 'instance' se ela não existir. É onde o DB ficará no Render.
-instance_path = os.path.join(basedir, 'instance')
-try:
-    os.makedirs(instance_path)
-except OSError:
-    pass
-
-app = Flask(__name__, instance_path=instance_path)
+app = Flask(__name__)
 CORS(app) 
 app.json.ensure_ascii = False
 
-# Usa o SQLite dentro da pasta 'instance'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///corridas.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
 
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'instance', 'corridas.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 class Corrida(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,44 +32,21 @@ class Corrida(db.Model):
     data_corrida = db.Column(db.DateTime, nullable=False)
     forma_pagamento = db.Column(db.String(100), nullable=True)
 
-@app.cli.command("init-db")
-def init_db_command():
-    """Cria as tabelas do banco de dados."""
-    with app.app_context():
-        db.create_all()
-    print("Banco de dados inicializado.")
-
 @app.route('/api/corridas', methods=['POST'])
 def adicionar_corrida():
     dados = request.get_json()
     if not dados or 'valor' not in dados or 'data_corrida' not in dados:
         return jsonify({'erro': 'Dados insuficientes (valor, data_corrida)'}), 400
-
     try:
         data_corrida_obj = parser.parse(dados['data_corrida'])
         valor_corrida = float(dados['valor'])
         plataforma = dados.get('plataforma')
     except (ValueError, TypeError):
         return jsonify({'erro': 'Valor ou formato de data inválido.'}), 400
-
-    corrida_existente = Corrida.query.filter_by(
-        plataforma=plataforma,
-        valor=valor_corrida,
-        data_corrida=data_corrida_obj
-    ).first()
-
+    corrida_existente = Corrida.query.filter_by(plataforma=plataforma, valor=valor_corrida, data_corrida=data_corrida_obj).first()
     if corrida_existente:
         return jsonify({'mensagem': 'Corrida duplicada, ignorada com sucesso.'}), 200
-
-    nova_corrida = Corrida(
-        valor=valor_corrida,
-        plataforma=plataforma,
-        origem=dados.get('origem'),
-        destino=dados.get('destino'),
-        data_corrida=data_corrida_obj,
-        forma_pagamento=dados.get('forma_pagamento')
-    )
-
+    nova_corrida = Corrida(valor=valor_corrida, plataforma=plataforma, origem=dados.get('origem'), destino=dados.get('destino'), data_corrida=data_corrida_obj, forma_pagamento=dados.get('forma_pagamento'))
     db.session.add(nova_corrida)
     db.session.commit()
     return jsonify({'mensagem': 'Corrida adicionada com sucesso!', 'id': nova_corrida.id}), 201
@@ -81,7 +55,6 @@ def adicionar_corrida():
 def editar_corrida(corrida_id):
     corrida = Corrida.query.get_or_404(corrida_id)
     dados = request.get_json()
-
     try:
         if 'plataforma' in dados: corrida.plataforma = dados['plataforma']
         if 'valor' in dados: corrida.valor = float(dados['valor'])
@@ -89,7 +62,6 @@ def editar_corrida(corrida_id):
         if 'destino' in dados: corrida.destino = dados['destino']
         if 'forma_pagamento' in dados: corrida.forma_pagamento = dados['forma_pagamento']
         if 'data_corrida' in dados: corrida.data_corrida = parser.parse(dados['data_corrida'])
-        
         db.session.commit()
         return jsonify({'mensagem': 'Corrida atualizada com sucesso!'})
     except (ValueError, TypeError):
@@ -106,19 +78,11 @@ def deletar_corrida(corrida_id):
 def listar_corridas():
     corridas_recentes = Corrida.query.order_by(Corrida.data_corrida.desc()).limit(50).all()
     lista_de_corridas = []
-    
     fuso_horario_local = pytz.timezone("America/Sao_Paulo")
-
     for corrida in corridas_recentes:
         data_utc = corrida.data_corrida.replace(tzinfo=pytz.utc)
         data_local = data_utc.astimezone(fuso_horario_local)
-
-        lista_de_corridas.append({
-            'id': corrida.id, 'valor': corrida.valor, 'plataforma': corrida.plataforma,
-            'origem': corrida.origem, 'destino': corrida.destino,
-            'data_corrida': data_local.strftime('%d/%m/%Y %H:%M'),
-            'forma_pagamento': corrida.forma_pagamento
-        })
+        lista_de_corridas.append({'id': corrida.id, 'valor': corrida.valor, 'plataforma': corrida.plataforma, 'origem': corrida.origem, 'destino': corrida.destino, 'data_corrida': data_local.strftime('%d/%m/%Y %H:%M'), 'forma_pagamento': corrida.forma_pagamento})
     return jsonify(lista_de_corridas)
 
 @app.route('/api/dashboard-stats', methods=['GET'])
@@ -128,10 +92,7 @@ def get_dashboard_stats():
     media_por_corrida = total_gasto / total_de_corridas if total_de_corridas > 0 else 0.0
     inicio_do_mes = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     total_este_mes = db.session.query(func.sum(Corrida.valor)).filter(Corrida.data_corrida >= inicio_do_mes).scalar() or 0.0
-    stats = {
-        'total_gasto': round(total_gasto, 2), 'total_de_corridas': total_de_corridas,
-        'media_por_corrida': round(media_por_corrida, 2), 'total_este_mes': round(total_este_mes, 2)
-    }
+    stats = {'total_gasto': round(total_gasto, 2), 'total_de_corridas': total_de_corridas, 'media_por_corrida': round(media_por_corrida, 2), 'total_este_mes': round(total_este_mes, 2)}
     return jsonify(stats)
 
 if __name__ == '__main__':
