@@ -1,4 +1,4 @@
-# app.py (VERSÃO FINAL COM MIGRATE E CORREÇÃO DE URL DO POSTGRES)
+# app.py (VERSÃO FINAL E SIMPLIFICADA)
 import os
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from sqlalchemy import func
 from dateutil import parser
 import pytz
-from flask_migrate import Migrate 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__)
@@ -21,7 +20,6 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'instance', 'corridas.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-migrate = Migrate(app, db)
 
 class Corrida(db.Model):
     id = db.Column(db.Integer, primary_key=True)
