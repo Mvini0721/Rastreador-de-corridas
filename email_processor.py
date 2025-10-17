@@ -1,4 +1,4 @@
-# email_processor.py (VERSÃO FINAL DE PRODUÇÃO)
+# email_processor.py (VERSÃO DE DEPURAÇÃO DE PDF)
 import os
 import certifi
 
@@ -81,17 +81,32 @@ def parse_html_details(html_content, from_header, date_header):
     return details
 
 def parse_pdf_details(pdf_content, date_header):
+    """Versão de depuração para imprimir o texto extraído do PDF da 99."""
     details = {'plataforma': '99', 'data_corrida': date_header, 'valor': None, 'origem': None, 'destino': None, 'forma_pagamento': None}
     try:
-        texto_pdf = "".join(page.extract_text() for page in PdfReader(io.BytesIO(pdf_content)).pages)
+        texto_pdf = ""
+        reader = PdfReader(io.BytesIO(pdf_content))
+        for page in reader.pages:
+            texto_pdf += page.extract_text()
+
+        # --- DEPURAÇÃO ---
+        print("\n--- TEXTO EXTRAÍDO DO PDF DA 99 ---")
+        print(texto_pdf)
+        print("--- FIM DO TEXTO DO PDF ---\n")
+        # -----------------
+        
         match_valor = re.search(r'(?:Total|Valor\s+da\s+corrida)\s+R\$\s*([\d,]+\.\d{2})', texto_pdf, re.I)
         if match_valor: details['valor'] = float(match_valor.group(1).replace(',', ''))
+        
         match_origem = re.search(r'Embarque\s+[\d/]+\s+às\s+\d{2}:\d{2}\s+em\s+(.*?)\s+Desembarque', texto_pdf, re.DOTALL)
         if match_origem: details['origem'] = match_origem.group(1).strip().replace('\n', ' ')
+
         match_destino = re.search(r'Desembarque\s+[\d/]+\s+às\s+\d{2}:\d{2}\s+em\s+(.*?)\s+Duração', texto_pdf, re.DOTALL)
         if match_destino: details['destino'] = match_destino.group(1).strip().replace('\n', ' ')
+        
         match_pagamento = re.search(r'Pagamento\s+em\s+([\w\s-]+)', texto_pdf, re.I)
         if match_pagamento: details['forma_pagamento'] = match_pagamento.group(1).strip()
+
     except Exception as e:
         print(f"Erro ao ler PDF: {e}")
     return details
@@ -120,7 +135,7 @@ def check_for_new_emails():
         service = get_gmail_service()
         if not service: return
 
-        query = "is:unread (from:(noreply@uber.com) OR (from:(voude99@99app.com) has:attachment))"
+        query = "is:unread from:(@uber.com OR @99app.com) subject:(recibo OR sua viagem OR receipt)"
         
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
